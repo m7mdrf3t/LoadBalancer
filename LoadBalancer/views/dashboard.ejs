@@ -1,0 +1,150 @@
+<html>
+<head>
+  <title>Load Balancer Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .section { margin-bottom: 20px; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Load Balancer Dashboard</h1>
+  
+  <!-- API & Character Management Section -->
+  <div class="section">
+    <h2>API & Character Management</h2>
+    <h3>Add API</h3>
+    <form id="addApiForm">
+      <input type="text" name="apiId" placeholder="API ID" required>
+      <input type="text" name="apiKey" placeholder="API Key" required>
+      <input type="text" name="characterId" placeholder="Character ID" required>
+      <button type="submit">Add API</button>
+    </form>
+    <h3>Update API</h3>
+    <form id="updateApiForm">
+      <input type="text" name="apiId" placeholder="API ID" required>
+      <input type="text" name="apiKey" placeholder="New API Key">
+      <input type="text" name="characterId" placeholder="New Character ID">
+      <button type="submit">Update API</button>
+    </form>
+    <h3>Remove API</h3>
+    <form id="removeApiForm">
+      <input type="text" name="apiId" placeholder="API ID" required>
+      <button type="submit">Remove API</button>
+    </form>
+    <h3>Current APIs</h3>
+    <table id="apiListTable" border="1" style="width:100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th>API ID</th>
+          <th>API Key</th>
+          <th>Character ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% apis.forEach(api => { %>
+          <tr>
+            <td><%= api.id %></td>
+            <td><%= api.apiKey %></td>
+            <td><%= api.characterId %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Live Monitoring Section -->
+  <div class="section">
+    <h2>Live Monitoring</h2>
+    <table id="monitoringTable" border="1" style="width:100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th>API ID</th>
+          <th>API Key</th>
+          <th>Character ID</th>
+          <th>Active Sessions</th>
+          <th>Closed Sessions</th>
+          <th>Max Sessions</th>
+          <th>TTL (seconds)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% monitoring.forEach(api => { %>
+          <tr>
+            <td><%= api.id %></td>
+            <td><%= api.apiKey %></td>
+            <td><%= api.characterId %></td>
+            <td id="active-<%= api.id %>"><%= api.activeCount %></td>
+            <td><%= api.closedCount %></td>
+            <td><%= api.maxSessions %></td>
+            <td><%= api.ttl %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Session Controls Section -->
+  <div class="section">
+    <h2>Session Controls</h2>
+    <button id="endAllSessions">End All Sessions for API</button>
+    <!-- Add inputs for updating max sessions and TTL -->
+  </div>
+  
+  <script>
+    // Auto-refresh monitoring data every 5 seconds
+    setInterval(async () => {
+      const response = await fetch('/api/monitoring');
+      const data = await response.json();
+      for (const [id, stats] of Object.entries(data)) {
+        document.getElementById(`active-${id}`).textContent = stats.activeCount;
+        // Update other elements if added
+      }
+    }, 5000);
+    document.getElementById('addApiForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      await fetch('/api/add-api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      location.reload(); // Refresh to update list
+    });
+    document.getElementById('updateApiForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      await fetch('/api/update-api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      location.reload();
+    });
+    document.getElementById('removeApiForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = { apiId: formData.get('apiId') };
+      await fetch('/api/remove-api', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      location.reload();
+    });
+  </script>
+</body>
+</html>
