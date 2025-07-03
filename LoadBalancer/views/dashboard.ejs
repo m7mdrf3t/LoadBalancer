@@ -1,150 +1,467 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <title>Load Balancer Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; }
-    .section { margin-bottom: 20px; }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background-color: #f0f0f0;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Load Balancer Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+            padding: 1.25rem; /* p-5 */
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+        .table-header th {
+            padding: 0.75rem 1rem; /* px-4 py-3 */
+            text-align: left;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 600; /* font-semibold */
+            color: #4a5568; /* text-gray-700 */
+            background-color: #edf2f7; /* bg-gray-100 */
+            border-bottom: 2px solid #e2e8f0; /* border-b-2 border-gray-200 */
+        }
+        .table-row td {
+            padding: 0.75rem 1rem; /* px-4 py-3 */
+            font-size: 0.875rem; /* text-sm */
+            color: #2d3748; /* text-gray-800 */
+            border-bottom: 1px solid #e2e8f0; /* border-b border-gray-200 */
+        }
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.625rem 1.25rem; /* px-5 py-2.5 */
+            border-radius: 0.5rem; /* rounded-md */
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 500; /* font-medium */
+            transition: background-color 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .button-primary {
+            background-color: #4f46e5; /* indigo-600 */
+            color: #ffffff;
+        }
+        .button-primary:hover {
+            background-color: #4338ca; /* indigo-700 */
+        }
+        .button-danger {
+            background-color: #ef4444; /* red-500 */
+            color: #ffffff;
+        }
+        .button-danger:hover {
+            background-color: #dc2626; /* red-600 */
+        }
+        .button-secondary {
+            background-color: #6b7280; /* gray-500 */
+            color: #ffffff;
+        }
+        .button-secondary:hover {
+            background-color: #4b5563; /* gray-600 */
+        }
+        .input-field {
+            padding: 0.5rem 0.75rem; /* px-3 py-2 */
+            border: 1px solid #d1d5db; /* border-gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            font-size: 0.875rem; /* text-sm */
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 90%;
+            max-width: 500px;
+        }
+        .message-box {
+            background-color: #d1fae5; /* green-100 */
+            color: #065f46; /* green-800 */
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            border: 1px solid #34d399; /* green-400 */
+        }
+        .error-box {
+            background-color: #fee2e2; /* red-100 */
+            color: #991b1b; /* red-800 */
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            border: 1px solid #ef4444; /* red-400 */
+        }
+    </style>
 </head>
-<body>
-  <h1>Load Balancer Dashboard</h1>
-  
-  <!-- API & Character Management Section -->
-  <div class="section">
-    <h2>API & Character Management</h2>
-    <h3>Add API</h3>
-    <form id="addApiForm">
-      <input type="text" name="apiId" placeholder="API ID" required>
-      <input type="text" name="apiKey" placeholder="API Key" required>
-      <input type="text" name="characterId" placeholder="Character ID" required>
-      <button type="submit">Add API</button>
-    </form>
-    <h3>Update API</h3>
-    <form id="updateApiForm">
-      <input type="text" name="apiId" placeholder="API ID" required>
-      <input type="text" name="apiKey" placeholder="New API Key">
-      <input type="text" name="characterId" placeholder="New Character ID">
-      <button type="submit">Update API</button>
-    </form>
-    <h3>Remove API</h3>
-    <form id="removeApiForm">
-      <input type="text" name="apiId" placeholder="API ID" required>
-      <button type="submit">Remove API</button>
-    </form>
-    <h3>Current APIs</h3>
-    <table id="apiListTable" border="1" style="width:100%; border-collapse: collapse;">
-      <thead>
-        <tr>
-          <th>API ID</th>
-          <th>API Key</th>
-          <th>Character ID</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% apis.forEach(api => { %>
-          <tr>
-            <td><%= api.id %></td>
-            <td><%= api.apiKey %></td>
-            <td><%= api.characterId %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-  
-  <!-- Live Monitoring Section -->
-  <div class="section">
-    <h2>Live Monitoring</h2>
-    <table id="monitoringTable" border="1" style="width:100%; border-collapse: collapse;">
-      <thead>
-        <tr>
-          <th>API ID</th>
-          <th>API Key</th>
-          <th>Character ID</th>
-          <th>Active Sessions</th>
-          <th>Closed Sessions</th>
-          <th>Max Sessions</th>
-          <th>TTL (seconds)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% monitoring.forEach(api => { %>
-          <tr>
-            <td><%= api.id %></td>
-            <td><%= api.apiKey %></td>
-            <td><%= api.characterId %></td>
-            <td id="active-<%= api.id %>"><%= api.activeCount %></td>
-            <td><%= api.closedCount %></td>
-            <td><%= api.maxSessions %></td>
-            <td><%= api.ttl %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-  
-  <!-- Session Controls Section -->
-  <div class="section">
-    <h2>Session Controls</h2>
-    <button id="endAllSessions">End All Sessions for API</button>
-    <!-- Add inputs for updating max sessions and TTL -->
-  </div>
-  
-  <script>
-    // Auto-refresh monitoring data every 5 seconds
-    setInterval(async () => {
-      const response = await fetch('/api/monitoring');
-      const data = await response.json();
-      for (const [id, stats] of Object.entries(data)) {
-        document.getElementById(`active-${id}`).textContent = stats.activeCount;
-        // Update other elements if added
-      }
-    }, 5000);
-    document.getElementById('addApiForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData.entries());
-      await fetch('/api/add-api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      location.reload(); // Refresh to update list
-    });
-    document.getElementById('updateApiForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData.entries());
-      await fetch('/api/update-api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      location.reload();
-    });
-    document.getElementById('removeApiForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = { apiId: formData.get('apiId') };
-      await fetch('/api/remove-api', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      location.reload();
-    });
-  </script>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center mb-8 text-indigo-700">API Load Balancer Dashboard</h1>
+
+        <!-- Message Box for Success/Error -->
+        <div id="messageBox" class="hidden message-box"></div>
+        <div id="errorBox" class="hidden error-box"></div>
+
+        <!-- Add API Section -->
+        <div class="card">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-600">Add New API</h2>
+            <form id="addApiForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label for="addApiId" class="block text-sm font-medium text-gray-700">API ID</label>
+                    <input type="text" id="addApiId" name="apiId" class="input-field mt-1" placeholder="e.g., api3" required>
+                </div>
+                <div>
+                    <label for="addApiKey" class="block text-sm font-medium text-gray-700">API Key</label>
+                    <input type="text" id="addApiKey" name="apiKey" class="input-field mt-1" placeholder="e.g., sk-your-api-key" required>
+                </div>
+                <div>
+                    <label for="addCharacterId" class="block text-sm font-medium text-gray-700">Character ID</label>
+                    <input type="text" id="addCharacterId" name="characterId" class="input-field mt-1" placeholder="e.g., char3" required>
+                </div>
+                <div>
+                    <label for="addMaxSessions" class="block text-sm font-medium text-gray-700">Max Sessions</label>
+                    <input type="number" id="addMaxSessions" name="maxSessions" class="input-field mt-1" value="5" min="1" required>
+                </div>
+                <div class="md:col-span-2 lg:col-span-4 flex justify-end">
+                    <button type="submit" class="button button-primary w-full md:w-auto">Add API</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- API List and Management -->
+        <div class="card">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-600">Managed APIs</h2>
+            <div class="overflow-x-auto">
+                <table id="apiListTable" class="min-w-full bg-white border-collapse rounded-lg overflow-hidden">
+                    <thead>
+                        <tr class="table-header">
+                            <th>API ID</th>
+                            <th>API Key</th>
+                            <th>Character ID</th>
+                            <th>Max Sessions</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (apis && apis.length > 0) { %>
+                            <% apis.forEach(api => { %>
+                                <tr class="table-row">
+                                    <td><%= api.id %></td>
+                                    <td><%= api.apiKey || 'N/A' %></td>
+                                    <td><%= api.characterId || 'N/A' %></td>
+                                    <td><%= api.maxSessions || 0 %></td>
+                                    <td class="text-center flex items-center justify-center space-x-2">
+                                        <button onclick="openUpdateModal('<%= api.id %>', '<%= api.apiKey %>', '<%= api.characterId %>', <%= api.maxSessions %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
+                                        <button onclick="removeApi('<%= api.id %>')" class="button button-danger text-xs px-3 py-1">Remove</button>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        <% } else { %>
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-gray-500">No APIs configured yet. Add one above!</td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- API Monitoring Section -->
+        <div class="card">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-600">API Monitoring</h2>
+            <div class="overflow-x-auto">
+                <table id="monitoringTable" class="min-w-full bg-white border-collapse rounded-lg overflow-hidden">
+                    <thead>
+                        <tr class="table-header">
+                            <th>API ID</th>
+                            <th>Active Sessions</th>
+                            <th>Max Sessions</th>
+                            <th>Closed Sessions</th>
+                            <th>Character ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (monitoring && monitoring.length > 0) { %>
+                            <% monitoring.forEach(mon => { %>
+                                <tr class="table-row">
+                                    <td><%= mon.id %></td>
+                                    <td><%= mon.activeCount %></td>
+                                    <td><%= mon.maxSessions %></td>
+                                    <td><%= mon.closedCount %></td>
+                                    <td><%= mon.characterId || 'N/A' %></td>
+                                </tr>
+                            <% }); %>
+                        <% } else { %>
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-gray-500">No monitoring data available.</td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="fetchAndDisplayMonitoring()" class="button button-primary mt-4 w-full md:w-auto">Refresh Monitoring Data</button>
+        </div>
+
+        <!-- Update API Modal -->
+        <div id="updateApiModal" class="modal hidden">
+            <div class="modal-content">
+                <h3 class="text-xl font-semibold mb-4 text-indigo-600">Update API Configuration</h3>
+                <input type="hidden" id="updateApiId">
+                <div class="mb-4">
+                    <label for="updateApiKey" class="block text-sm font-medium text-gray-700">API Key</label>
+                    <input type="text" id="updateApiKey" class="input-field mt-1">
+                </div>
+                <div class="mb-4">
+                    <label for="updateCharacterId" class="block text-sm font-medium text-gray-700">Character ID</label>
+                    <input type="text" id="updateCharacterId" class="input-field mt-1">
+                </div>
+                <div class="mb-6">
+                    <label for="updateMaxSessions" class="block text-sm font-medium text-gray-700">Max Sessions</label>
+                    <input type="number" id="updateMaxSessions" class="input-field mt-1" min="1">
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeUpdateModal()" class="button button-secondary">Cancel</button>
+                    <button onclick="updateApi()" class="button button-primary">Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Helper Functions for UI Messages ---
+        function showMessage(message, isError = false) {
+            const messageBox = document.getElementById('messageBox');
+            const errorBox = document.getElementById('errorBox');
+
+            // Hide both first
+            messageBox.classList.add('hidden');
+            errorBox.classList.add('hidden');
+
+            if (isError) {
+                errorBox.textContent = message;
+                errorBox.classList.remove('hidden');
+            } else {
+                messageBox.textContent = message;
+                messageBox.classList.remove('hidden');
+            }
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+                errorBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            showMessage(message, false);
+        }
+
+        function showError(message) {
+            showMessage(message, true);
+        }
+
+        // --- API Management Functions ---
+
+        document.getElementById('addApiForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+
+            // Convert maxSessions to a number
+            data.maxSessions = parseInt(data.maxSessions, 10);
+
+            if (!data.apiId || !data.apiKey || !data.characterId || isNaN(data.maxSessions) || data.maxSessions <= 0) {
+                showError('Please fill in all fields correctly for adding an API (ID, Key, Character ID must be non-empty, Max Sessions must be a positive number).');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/add-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showSuccess(result.message);
+                    // Clear form fields
+                    e.target.reset(); // Resets all form fields
+                    document.getElementById('addMaxSessions').value = '5'; // Ensure default is reset
+                    location.reload(); // Refresh to update list
+                } else {
+                    showError(result.message || 'Failed to add API.');
+                }
+            } catch (error) {
+                console.error('Error adding API:', error);
+                showError('An error occurred while adding the API. Check console for details.');
+            }
+        });
+
+        let currentUpdateApiId = null; // To store the ID of the API being updated
+
+        function openUpdateModal(apiId, apiKey, characterId, maxSessions) {
+            currentUpdateApiId = apiId;
+            document.getElementById('updateApiId').value = apiId; // Hidden field
+            document.getElementById('updateApiKey').value = apiKey;
+            document.getElementById('updateCharacterId').value = characterId;
+            document.getElementById('updateMaxSessions').value = maxSessions;
+            document.getElementById('updateApiModal').classList.remove('hidden');
+        }
+
+        function closeUpdateModal() {
+            document.getElementById('updateApiModal').classList.add('hidden');
+            currentUpdateApiId = null;
+        }
+
+        async function updateApi() {
+            const apiId = document.getElementById('updateApiId').value.trim();
+            const apiKey = document.getElementById('updateApiKey').value.trim();
+            const characterId = document.getElementById('updateCharacterId').value.trim();
+            const maxSessions = parseInt(document.getElementById('updateMaxSessions').value, 10);
+
+            if (!apiId || !apiKey || !characterId || isNaN(maxSessions) || maxSessions <= 0) {
+                showError('Please fill in all fields correctly for updating an API (Key, Character ID must be non-empty, Max Sessions must be a positive number).');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/update-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiId, apiKey, characterId, maxSessions })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showSuccess(result.message);
+                    closeUpdateModal();
+                    location.reload(); // Refresh dashboard data
+                } else {
+                    showError(result.message || 'Failed to update API.');
+                }
+            } catch (error) {
+                console.error('Error updating API:', error);
+                showError('An error occurred while updating the API. Check console for details.');
+            }
+        }
+
+        async function removeApi(apiId) {
+            // Use custom confirm function
+            const confirmed = await customConfirm(`Are you sure you want to remove API '${apiId}'? This action cannot be undone.`);
+            if (!confirmed) {
+                return; // User cancelled
+            }
+
+            try {
+                const response = await fetch('/api/remove-api', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiId })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showSuccess(result.message);
+                    location.reload(); // Refresh dashboard data
+                } else {
+                    showError(result.message || 'Failed to remove API.');
+                }
+            } catch (error) {
+                console.error('Error removing API:', error);
+                showError('An error occurred while removing the API. Check console for details.');
+            }
+        }
+
+        // --- Monitoring Refresh Function ---
+        // Auto-refresh monitoring data every 5 seconds
+        setInterval(fetchAndDisplayMonitoring, 5000);
+
+        async function fetchAndDisplayMonitoring() {
+            try {
+                const response = await fetch('/api/monitoring');
+                const monitoringData = await response.json();
+
+                const tableBody = document.querySelector('#monitoringTable tbody');
+                tableBody.innerHTML = ''; // Clear existing rows
+
+                if (monitoringData && monitoringData.length > 0) {
+                    monitoringData.forEach(mon => {
+                        const row = `
+                            <tr class="table-row">
+                                <td>${mon.id}</td>
+                                <td>${mon.activeCount}</td>
+                                <td>${mon.maxSessions}</td>
+                                <td>${mon.closedCount}</td>
+                                <td>${mon.characterId || 'N/A'}</td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                    // showSuccess('Monitoring data refreshed!'); // Only show on manual refresh
+                } else {
+                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
+                    // showError('No monitoring data available.'); // Only show on manual refresh
+                }
+            } catch (error) {
+                console.error('Error fetching and displaying monitoring data:', error);
+                // showError('Failed to refresh monitoring data. Check console for details.'); // Only show on manual refresh
+            }
+        }
+
+
+        // Custom confirm function to replace window.confirm
+        function customConfirm(message) {
+            return new Promise((resolve) => {
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800">Confirm Action</h3>
+                        <p class="mb-6">${message}</p>
+                        <div class="flex justify-end space-x-3">
+                            <button id="cancelConfirm" class="button button-secondary">Cancel</button>
+                            <button id="okConfirm" class="button button-danger">Confirm</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                document.getElementById('okConfirm').onclick = () => {
+                    document.body.removeChild(modal);
+                    resolve(true);
+                };
+                document.getElementById('cancelConfirm').onclick = () => {
+                    document.body.removeChild(modal);
+                    resolve(false);
+                };
+            });
+        }
+
+    </script>
 </body>
 </html>
