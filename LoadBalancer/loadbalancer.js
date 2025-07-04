@@ -9,10 +9,33 @@ require('dotenv').config();
 const app = express();
 
 // --- Middleware ---
+// --- Middleware ---
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  // IMPORTANT CORS FIX:
+  // Instead of '*', specify the exact origin(s) of your frontend application.
+  // For development, this is typically 'http://localhost:3000'.
+  // For production, this should be your deployed frontend URL (e.g., 'https://your-frontend-app.railway.app').
+  // You can use an environment variable for this.
+  const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000'; 
+  res.header('Access-Control-Allow-Origin', allowedOrigin);
+
+  // Allow credentials (cookies, HTTP auth) to be sent with cross-origin requests.
+  // This MUST be true if Access-Control-Allow-Origin is not '*' and credentials are used.
+  res.header('Access-Control-Allow-Credentials', 'true'); 
+
+  // Specify which headers are allowed in the actual request.
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
+
+  // Specify which methods are allowed. This is crucial for preflight (OPTIONS) requests.
+  // Include all methods your API uses (GET, POST, DELETE, OPTIONS, etc.)
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+
+  // Handle preflight requests (OPTIONS method)
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200); // Respond with 200 OK for preflight
+  } else {
+    next(); // Continue to the actual route handler
+  }
 });
 
 app.use(bodyParser.json());
