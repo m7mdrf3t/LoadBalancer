@@ -187,7 +187,7 @@
                                     <td class="break-all"><%= api.characterId || 'N/A' %></td>
                                     <td><%= api.maxSessions || 0 %></td>
                                     <td class="text-center flex items-center justify-center space-x-2">
-                                        <button onclick="openUpdateModal('<%= api.id %>', '<%= api.apiKey %>', '<%= api.characterId %>', <%= api.maxSessions %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
+                                        <button onclick="openUpdateModal('<%= api.id %>', <%= JSON.stringify(api.apiKey) %>, <%= JSON.stringify(api.characterId) %>, <%= api.maxSessions %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
                                         <button onclick="removeApi('<%= api.id %>')" class="button button-danger text-xs px-3 py-1">Remove</button>
                                     </td>
                                 </tr>
@@ -215,7 +215,7 @@
                             <th>Max Sessions</th>
                             <th>Closed Sessions</th>
                             <th>Character ID</th>
-                            <th>Active Users</th> <%-- NEW COLUMN --%>
+                            <th>Active Users</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -238,7 +238,7 @@
                                         <% } else { %>
                                             None
                                         <% } %>
-                                    </td> <%-- NEW CELL --%>
+                                    </td>
                                     <td class="text-center">
                                         <button onclick="endAllSessionsForApi('<%= mon.id %>')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
                                     </td>
@@ -246,7 +246,7 @@
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td> <%-- Updated colspan --%>
+                                <td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td>
                             </tr>
                         <% } %>
                     </tbody>
@@ -473,7 +473,7 @@
                                 <td>${mon.maxSessions}</td>
                                 <td>${mon.closedCount}</td>
                                 <td class="break-all">${mon.characterId || 'N/A'}</td>
-                                <td class="break-all text-xs">${activeUsersList}</td> <%-- Display active users --%>
+                                <td class="break-all text-xs">${activeUsersList}</td>
                                 <td class="text-center">
                                     <button onclick="endAllSessionsForApi('${mon.id}')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
                                 </td>
@@ -482,7 +482,7 @@
                         tableBody.insertAdjacentHTML('beforeend', row);
                     });
                 } else {
-                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`; // Updated colspan
+                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
                 }
             } catch (error) {
                 console.error('Error fetching and displaying monitoring data:', error);
@@ -568,7 +568,6 @@
             }
 
             try {
-                // This will call a new backend endpoint to clear all sessions for a specific API
                 const response = await fetch('/api/end-all-sessions-for-api', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
