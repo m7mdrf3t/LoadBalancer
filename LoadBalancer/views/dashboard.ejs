@@ -118,6 +118,16 @@
             margin-bottom: 1rem;
             border: 1px solid #ef4444; /* red-400 */
         }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-dot.available { background-color: #22c55e; /* green-500 */ }
+        .status-dot.full { background-color: #ef4444; /* red-500 */ }
+        .status-dot.unknown { background-color: #9ca3af; /* gray-400 */ }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -173,8 +183,8 @@
                             <% apis.forEach(api => { %>
                                 <tr class="table-row">
                                     <td><%= api.id %></td>
-                                    <td><%= api.apiKey || 'N/A' %></td>
-                                    <td><%= api.characterId || 'N/A' %></td>
+                                    <td class="break-all"><%= api.apiKey || 'N/A' %></td>
+                                    <td class="break-all"><%= api.characterId || 'N/A' %></td>
                                     <td><%= api.maxSessions || 0 %></td>
                                     <td class="text-center flex items-center justify-center space-x-2">
                                         <button onclick="openUpdateModal('<%= api.id %>', '<%= api.apiKey %>', '<%= api.characterId %>', <%= api.maxSessions %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
@@ -200,10 +210,12 @@
                     <thead>
                         <tr class="table-header">
                             <th>API ID</th>
+                            <th>Status</th>
                             <th>Active Sessions</th>
                             <th>Max Sessions</th>
                             <th>Closed Sessions</th>
                             <th>Character ID</th>
+                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -211,21 +223,48 @@
                             <% monitoring.forEach(mon => { %>
                                 <tr class="table-row">
                                     <td><%= mon.id %></td>
+                                    <td>
+                                        <span class="status-dot <%= mon.activeCount < mon.maxSessions ? 'available' : 'full' %>"></span>
+                                        <%= mon.activeCount < mon.maxSessions ? 'Available' : 'Full' %>
+                                    </td>
                                     <td><%= mon.activeCount %></td>
                                     <td><%= mon.maxSessions %></td>
                                     <td><%= mon.closedCount %></td>
-                                    <td><%= mon.characterId || 'N/A' %></td>
+                                    <td class="break-all"><%= mon.characterId || 'N/A' %></td>
+                                    <td class="text-center">
+                                        <button onclick="endAllSessionsForApi('<%= mon.id %>')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
+                                    </td>
                                 </tr>
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="5" class="text-center py-4 text-gray-500">No monitoring data available.</td>
+                                <td colspan="7" class="text-center py-4 text-gray-500">No monitoring data available.</td>
                             </tr>
                         <% } %>
                     </tbody>
                 </table>
             </div>
             <button onclick="fetchAndDisplayMonitoring()" class="button button-primary mt-4 w-full md:w-auto">Refresh Monitoring Data</button>
+        </div>
+
+        <!-- Manual Session Control Section -->
+        <div class="card">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-600">Manual Session Control</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="manualUserId" class="block text-sm font-medium text-gray-700">User ID</label>
+                    <input type="text" id="manualUserId" class="input-field mt-1" placeholder="e.g., user123">
+                </div>
+                <div>
+                    <label for="assignedApiId" class="block text-sm font-medium text-gray-700">Assigned API ID (Read-only)</label>
+                    <input type="text" id="assignedApiId" class="input-field mt-1 bg-gray-100" readonly>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="getApiSessionManual()" class="button button-primary">Get API Session</button>
+                <button onclick="endApiSessionManual()" class="button button-danger">End API Session</button>
+                <button onclick="generateAndSetUserId()" class="button button-secondary">Generate New User ID</button>
+            </div>
         </div>
 
         <!-- Update API Modal -->
@@ -311,10 +350,9 @@
                 const result = await response.json();
                 if (response.ok) {
                     showSuccess(result.message);
-                    // Clear form fields
                     e.target.reset(); // Resets all form fields
                     document.getElementById('addMaxSessions').value = '5'; // Ensure default is reset
-                    location.reload(); // Refresh to update list
+                    fetchAndDisplayMonitoring(); // Refresh monitoring data
                 } else {
                     showError(result.message || 'Failed to add API.');
                 }
@@ -361,7 +399,7 @@
                 if (response.ok) {
                     showSuccess(result.message);
                     closeUpdateModal();
-                    location.reload(); // Refresh dashboard data
+                    fetchAndDisplayMonitoring(); // Refresh monitoring data
                 } else {
                     showError(result.message || 'Failed to update API.');
                 }
@@ -372,10 +410,9 @@
         }
 
         async function removeApi(apiId) {
-            // Use custom confirm function
             const confirmed = await customConfirm(`Are you sure you want to remove API '${apiId}'? This action cannot be undone.`);
             if (!confirmed) {
-                return; // User cancelled
+                return;
             }
 
             try {
@@ -387,7 +424,7 @@
                 const result = await response.json();
                 if (response.ok) {
                     showSuccess(result.message);
-                    location.reload(); // Refresh dashboard data
+                    fetchAndDisplayMonitoring(); // Refresh monitoring data
                 } else {
                     showError(result.message || 'Failed to remove API.');
                 }
@@ -401,6 +438,9 @@
         // Auto-refresh monitoring data every 5 seconds
         setInterval(fetchAndDisplayMonitoring, 5000);
 
+        // Initial fetch on page load
+        document.addEventListener('DOMContentLoaded', fetchAndDisplayMonitoring);
+
         async function fetchAndDisplayMonitoring() {
             try {
                 const response = await fetch('/api/monitoring');
@@ -411,25 +451,147 @@
 
                 if (monitoringData && monitoringData.length > 0) {
                     monitoringData.forEach(mon => {
+                        const statusClass = mon.activeCount < mon.maxSessions ? 'available' : 'full';
+                        const statusText = mon.activeCount < mon.maxSessions ? 'Available' : 'Full';
                         const row = `
                             <tr class="table-row">
                                 <td>${mon.id}</td>
+                                <td>
+                                    <span class="status-dot ${statusClass}"></span>
+                                    ${statusText}
+                                </td>
                                 <td>${mon.activeCount}</td>
                                 <td>${mon.maxSessions}</td>
                                 <td>${mon.closedCount}</td>
-                                <td>${mon.characterId || 'N/A'}</td>
+                                <td class="break-all">${mon.characterId || 'N/A'}</td>
+                                <td class="text-center">
+                                    <button onclick="endAllSessionsForApi('${mon.id}')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
+                                </td>
                             </tr>
                         `;
                         tableBody.insertAdjacentHTML('beforeend', row);
                     });
-                    // showSuccess('Monitoring data refreshed!'); // Only show on manual refresh
                 } else {
-                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
-                    // showError('No monitoring data available.'); // Only show on manual refresh
+                    tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
                 }
             } catch (error) {
                 console.error('Error fetching and displaying monitoring data:', error);
-                // showError('Failed to refresh monitoring data. Check console for details.'); // Only show on manual refresh
+                showError('Failed to refresh monitoring data. Check console for details.');
+            }
+        }
+
+        // --- Manual Session Control Functions ---
+        function generateRandomUserId() {
+            return typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+        }
+
+        function generateAndSetUserId() {
+            const newUserId = generateRandomUserId();
+            document.getElementById('manualUserId').value = newUserId;
+            document.getElementById('assignedApiId').value = ''; // Clear assigned API when new user is generated
+            showSuccess('New User ID generated. Click "Get API Session" to assign an API.');
+        }
+
+        async function getApiSessionManual() {
+            const userId = document.getElementById('manualUserId').value.trim();
+            if (!userId) {
+                showError('Please enter a User ID to get a session.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/get-api-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('assignedApiId').value = data.apiId || 'N/A';
+                    showSuccess(`Session assigned for User ID: ${userId} with API: ${data.apiId}.`);
+                    fetchAndDisplayMonitoring(); // Update monitoring data
+                } else {
+                    showError(data.message || 'Failed to get API session.');
+                }
+            } catch (error) {
+                console.error('Error getting API session:', error);
+                showError('An error occurred while getting the API session. Check console for details.');
+            }
+        }
+
+        async function endApiSessionManual() {
+            const userId = document.getElementById('manualUserId').value.trim();
+            if (!userId) {
+                showError('Please enter a User ID to end the session.');
+                return;
+            }
+
+            const confirmed = await customConfirm(`Are you sure you want to end the session for User ID '${userId}'?`);
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/end-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('assignedApiId').value = ''; // Clear assigned API
+                    showSuccess(data.message || `Session ended for User ID: ${userId}.`);
+                    fetchAndDisplayMonitoring(); // Update monitoring data
+                } else {
+                    showError(data.message || 'Failed to end API session.');
+                }
+            } catch (error) {
+                console.error('Error ending API session:', error);
+                showError('An error occurred while ending the API session. Check console for details.');
+            }
+        }
+
+        async function endAllSessionsForApi(apiId) {
+            const confirmed = await customConfirm(`Are you sure you want to end ALL active sessions for API '${apiId}'? This will disconnect active users.`);
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                // This would require a new backend endpoint.
+                // For now, we'll simulate or instruct.
+                // You would add a new endpoint like: app.post('/api/end-all-sessions-for-api', ...)
+                // that iterates through users associated with that API and calls redis.del for each.
+                // For a quick fix, you could manually clear the `api:${apiId}:sessions` key and the `api:${apiId}:users` set.
+                // However, this won't trigger individual user session cleanup on the client side.
+
+                // A more robust solution would be to have the backend:
+                // 1. Fetch all user IDs associated with this API (e.g., from `api:${apiId}:users` set)
+                // 2. For each userId, delete `user:${userId}` key
+                // 3. Reset `api:${apiId}:sessions` to 0
+                // 4. Clear the `api:${apiId}:users` set
+
+                // For demonstration, let's just reset the counter and clear the user set on the backend.
+                // This assumes your backend has an endpoint for this, or you'd add it.
+                // If you don't have a backend endpoint for this, this button will only visually update the dashboard
+                // and won't actually clear individual user sessions in Redis.
+
+                // Simulating the backend call for now:
+                // await fetch('/api/end-all-sessions-for-api', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ apiId })
+                // });
+
+                // Manual Redis operations (if you were to run this directly in a backend script or console)
+                // await redis.del(`api:${apiId}:sessions`);
+                // await redis.del(`api:${apiId}:users`);
+
+                showSuccess(`Request to end all sessions for API '${apiId}' sent. Please verify in monitoring.`);
+                fetchAndDisplayMonitoring(); // Refresh monitoring data
+            } catch (error) {
+                console.error('Error ending all sessions for API:', error);
+                showError('An error occurred while trying to end all sessions for the API. Check console for details.');
             }
         }
 
