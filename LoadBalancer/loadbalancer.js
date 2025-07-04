@@ -147,6 +147,7 @@ async function getAvailableAPI() {
 /**
  * Helper function to fetch monitoring data for all APIs.
  * This is used by the dashboard route and the monitoring API endpoint.
+ * Now includes active users for each API.
  * @returns {Promise<Array<Object>>} An array of API monitoring objects.
  */
 async function fetchMonitoringData() {
@@ -172,6 +173,7 @@ async function fetchMonitoringData() {
       const activeCount = Number(await redis.get(activeSessionsKey) || 0);
       const closedSessionsKey = `api:${id}:closedSessions`;
       const closedCount = Number(await redis.get(closedSessionsKey) || 0);
+      const activeUsers = await redis.smembers(`api:${id}:users`); // Fetch active users from the set
 
       monitoring.push({
         id,
@@ -179,7 +181,8 @@ async function fetchMonitoringData() {
         characterId: data.characterId,
         maxSessions: data.maxSessions,
         activeCount,
-        closedCount
+        closedCount,
+        activeUsers // Include active users in the monitoring data
       });
     } catch (e) {
       console.error(`[ERROR] Error processing monitoring data for API ID ${id}: ${e.message}. Data was: "${dataStr}"`);
@@ -231,7 +234,7 @@ app.post('/api/get-api-session', async (req, res) => {
 
     const targetAPI = await getAvailableAPI();
     if (!targetAPI) {
-      console.log(`[SESSION] User ${userId} could not get a session: All APIs at max capacity.`);
+      console.log(`[SESSION] User ${userId} could not get a session: All APIs are at max capacity.`);
       return res.status(503).json({ message: 'All APIs are at max capacity. Try again later.' });
     }
 
@@ -271,8 +274,6 @@ app.post('/api/end-session', async (req, res) => {
   try {
     const sessionDataStr = await redis.get(`user:${userId}`);
     if (!sessionDataStr) {
-      // If no session is found, it might already be ended or expired.
-      // Log it, but return success to avoid unnecessary errors on the frontend.
       console.log(`[SESSION] No active session found for user ${userId}. Session might be already ended or expired.`);
       return res.json({ message: 'No active session found for this user, or session already ended.' });
     }
@@ -289,7 +290,6 @@ app.post('/api/end-session', async (req, res) => {
       return res.status(500).json({ message: 'Internal Server Error: Corrupt session data. Session cleared.' });
     }
 
-    // Decrement active session count for the API, ensuring it doesn't go below zero
     const activeSessionsKey = `api:${session.apiId}:sessions`;
     const currentSessions = Number(await redis.get(activeSessionsKey) || 0);
 
@@ -300,15 +300,12 @@ app.post('/api/end-session', async (req, res) => {
       console.warn(`[SESSION] Attempted to decrement sessions for API ${session.apiId} but count was already 0 or less.`);
     }
 
-    // Remove user session from Redis
     await redis.del(`user:${userId}`);
     console.log(`[SESSION] Removed user session key for ${userId}.`);
 
-    // Remove user from the set of users for this API (optional)
     await redis.srem(`api:${session.apiId}:users`, userId);
     console.log(`[SESSION] Removed user ${userId} from API ${session.apiId} user set.`);
 
-    // Increment closed session count for monitoring
     await redis.incr(`api:${session.apiId}:closedSessions`);
     console.log(`[SESSION] Incremented closed sessions for API ${session.apiId}.`);
 
@@ -476,11 +473,65 @@ app.get('/dashboard', async (req, res) => {
   }
 });
 
+// --- New Endpoint: End All Sessions for a Specific API ---
+app.post('/api/end-all-sessions-for-api', async (req, res) => {
+  const { apiId } = req.body;
+  console.log(`[REQUEST] /api/end-all-sessions-for-api received for apiId: ${apiId}`);
+
+  if (!apiId || typeof apiId !== 'string' || apiId.trim() === '') {
+    console.warn(`[VALIDATION] Invalid apiId provided for ending all sessions: "${apiId}"`);
+    return res.status(400).json({ message: 'Invalid input: apiId is required and must be a non-empty string.' });
+  }
+
+  try {
+    const apiExists = await redis.hexists('apiPool', apiId);
+    if (!apiExists) {
+      console.warn(`[API_MGMT] API with ID '${apiId}' not found. Cannot end all sessions.`);
+      return res.status(404).json({ message: `API with ID '${apiId}' not found.` });
+    }
+
+    const activeUsers = await redis.smembers(`api:${apiId}:users`);
+    let sessionsClearedCount = 0;
+
+    if (activeUsers && activeUsers.length > 0) {
+      console.log(`[SESSION] Ending ${activeUsers.length} active sessions for API ${apiId}.`);
+      // Use a Redis pipeline for efficiency if many users
+      const pipeline = redis.pipeline();
+      for (const userIdToClear of activeUsers) {
+        pipeline.del(`user:${userIdToClear}`); // Delete individual user session keys
+        sessionsClearedCount++;
+      }
+      await pipeline.exec(); // Execute all commands in the pipeline
+      console.log(`[SESSION] Cleared ${sessionsClearedCount} individual user session keys for API ${apiId}.`);
+    } else {
+      console.log(`[SESSION] No active users found for API ${apiId}.`);
+    }
+
+    // Reset active sessions count to 0
+    await redis.set(`api:${apiId}:sessions`, 0);
+    console.log(`[SESSION] Reset active sessions count for API ${apiId} to 0.`);
+
+    // Increment closed sessions by the number of sessions just cleared
+    await redis.incrby(`api:${apiId}:closedSessions`, sessionsClearedCount);
+    console.log(`[SESSION] Incremented closed sessions by ${sessionsClearedCount} for API ${apiId}.`);
+
+    // Clear the set of active users for this API
+    await redis.del(`api:${apiId}:users`);
+    console.log(`[SESSION] Cleared active users set for API ${apiId}.`);
+
+    console.log(`[API_MGMT] All sessions for API ${apiId} have been successfully cleared.`);
+    res.json({ message: `All ${sessionsClearedCount} sessions for API '${apiId}' ended successfully.` });
+  } catch (error) {
+    console.error('[ERROR] Error in /api/end-all-sessions-for-api:', error);
+    res.status(500).json({ message: 'Internal Server Error during bulk session termination.' });
+  }
+});
+
+
 // --- Health Check Endpoint ---
 app.get('/api/health', async (req, res) => {
   console.log('[REQUEST] /api/health received.');
   try {
-    // Ping Redis to check connectivity
     await redis.ping();
     res.status(200).json({ status: 'ok', message: 'Load balancer and Redis are healthy.' });
   } catch (error) {

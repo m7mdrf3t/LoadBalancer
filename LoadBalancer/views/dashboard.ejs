@@ -215,6 +215,7 @@
                             <th>Max Sessions</th>
                             <th>Closed Sessions</th>
                             <th>Character ID</th>
+                            <th>Active Users</th> <%-- NEW COLUMN --%>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -231,6 +232,13 @@
                                     <td><%= mon.maxSessions %></td>
                                     <td><%= mon.closedCount %></td>
                                     <td class="break-all"><%= mon.characterId || 'N/A' %></td>
+                                    <td class="break-all text-xs">
+                                        <% if (mon.activeUsers && mon.activeUsers.length > 0) { %>
+                                            <%= mon.activeUsers.join(', ') %>
+                                        <% } else { %>
+                                            None
+                                        <% } %>
+                                    </td> <%-- NEW CELL --%>
                                     <td class="text-center">
                                         <button onclick="endAllSessionsForApi('<%= mon.id %>')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
                                     </td>
@@ -238,7 +246,7 @@
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="7" class="text-center py-4 text-gray-500">No monitoring data available.</td>
+                                <td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td> <%-- Updated colspan --%>
                             </tr>
                         <% } %>
                     </tbody>
@@ -453,6 +461,7 @@
                     monitoringData.forEach(mon => {
                         const statusClass = mon.activeCount < mon.maxSessions ? 'available' : 'full';
                         const statusText = mon.activeCount < mon.maxSessions ? 'Available' : 'Full';
+                        const activeUsersList = mon.activeUsers && mon.activeUsers.length > 0 ? mon.activeUsers.join(', ') : 'None'; // Prepare active users string
                         const row = `
                             <tr class="table-row">
                                 <td>${mon.id}</td>
@@ -464,6 +473,7 @@
                                 <td>${mon.maxSessions}</td>
                                 <td>${mon.closedCount}</td>
                                 <td class="break-all">${mon.characterId || 'N/A'}</td>
+                                <td class="break-all text-xs">${activeUsersList}</td> <%-- Display active users --%>
                                 <td class="text-center">
                                     <button onclick="endAllSessionsForApi('${mon.id}')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
                                 </td>
@@ -472,7 +482,7 @@
                         tableBody.insertAdjacentHTML('beforeend', row);
                     });
                 } else {
-                    tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
+                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`; // Updated colspan
                 }
             } catch (error) {
                 console.error('Error fetching and displaying monitoring data:', error);
@@ -558,37 +568,19 @@
             }
 
             try {
-                // This would require a new backend endpoint.
-                // For now, we'll simulate or instruct.
-                // You would add a new endpoint like: app.post('/api/end-all-sessions-for-api', ...)
-                // that iterates through users associated with that API and calls redis.del for each.
-                // For a quick fix, you could manually clear the `api:${apiId}:sessions` key and the `api:${apiId}:users` set.
-                // However, this won't trigger individual user session cleanup on the client side.
-
-                // A more robust solution would be to have the backend:
-                // 1. Fetch all user IDs associated with this API (e.g., from `api:${apiId}:users` set)
-                // 2. For each userId, delete `user:${userId}` key
-                // 3. Reset `api:${apiId}:sessions` to 0
-                // 4. Clear the `api:${apiId}:users` set
-
-                // For demonstration, let's just reset the counter and clear the user set on the backend.
-                // This assumes your backend has an endpoint for this, or you'd add it.
-                // If you don't have a backend endpoint for this, this button will only visually update the dashboard
-                // and won't actually clear individual user sessions in Redis.
-
-                // Simulating the backend call for now:
-                // await fetch('/api/end-all-sessions-for-api', {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify({ apiId })
-                // });
-
-                // Manual Redis operations (if you were to run this directly in a backend script or console)
-                // await redis.del(`api:${apiId}:sessions`);
-                // await redis.del(`api:${apiId}:users`);
-
-                showSuccess(`Request to end all sessions for API '${apiId}' sent. Please verify in monitoring.`);
-                fetchAndDisplayMonitoring(); // Refresh monitoring data
+                // This will call a new backend endpoint to clear all sessions for a specific API
+                const response = await fetch('/api/end-all-sessions-for-api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiId })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showSuccess(result.message || `All sessions for API '${apiId}' have been requested to end.`);
+                    fetchAndDisplayMonitoring(); // Refresh monitoring data
+                } else {
+                    showError(result.message || 'Failed to end all sessions for API.');
+                }
             } catch (error) {
                 console.error('Error ending all sessions for API:', error);
                 showError('An error occurred while trying to end all sessions for the API. Check console for details.');
