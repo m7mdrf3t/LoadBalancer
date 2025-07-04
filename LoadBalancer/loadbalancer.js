@@ -9,7 +9,6 @@ require('dotenv').config();
 const app = express();
 
 // --- Middleware ---
-// --- Middleware ---
 app.use((req, res, next) => {
   // IMPORTANT CORS FIX:
   // Instead of '*', specify the exact origin(s) of your frontend application.
@@ -69,7 +68,7 @@ async function ensureApiPool() {
     let apiPoolData = await redis.hgetall('apiPool');
 
     if (!apiPoolData || Object.keys(apiPoolData).length === 0) {
-      console.log('[STARTUP] apiPool does not exist or is empty. No initial cleanup needed.');
+      console.log('apiPool does not exist or is empty, initializing.');
       return;
     }
 
@@ -81,9 +80,16 @@ async function ensureApiPool() {
       }
       try {
         const parsedData = JSON.parse(dataStr);
+        // Ensure required fields and new 'enabled' field (default to true if missing)
         if (typeof parsedData !== 'object' || parsedData === null ||
             !parsedData.apiKey || !parsedData.characterId || typeof parsedData.maxSessions !== 'number' || parsedData.maxSessions <= 0) {
           throw new Error('Invalid API data structure or missing required fields.');
+        }
+        // If 'enabled' field is missing, default it to true
+        if (typeof parsedData.enabled === 'undefined') {
+          parsedData.enabled = true;
+          await redis.hset('apiPool', id, JSON.stringify(parsedData)); // Update in Redis
+          console.log(`[CLEANUP] Defaulted 'enabled' to true for API ID ${id}.`);
         }
       } catch (e) {
         console.error(`[CLEANUP] Removing invalid data for API ID ${id}: ${e.message}. Data was: "${dataStr}"`);
@@ -105,6 +111,7 @@ async function seedInitialApi() {
   const apiKey = 'd0cb7e13755411b19bf931139e028bde';
   const characterId = 'c29f49b8-3b46-11f0-b6c9-42010a7be01f';
   const maxSessions = 5; // Default max sessions for this seeded API
+  const enabled = true; // New: API is enabled by default
 
   console.log(`[STARTUP] Attempting to seed initial API: ${apiId}`);
   try {
@@ -114,7 +121,7 @@ async function seedInitialApi() {
       return;
     }
 
-    const apiData = { apiKey, characterId, maxSessions };
+    const apiData = { apiKey, characterId, maxSessions, enabled }; // Include enabled
     await redis.hset('apiPool', apiId, JSON.stringify(apiData));
     await redis.set(`api:${apiId}:sessions`, 0);
     await redis.set(`api:${apiId}:closedSessions`, 0);
@@ -134,7 +141,7 @@ async function seedInitialApi() {
 })();
 
 /**
- * Finds the first available API from the apiPool based on session limits.
+ * Finds the first available API from the apiPool based on session limits and enabled status.
  * @returns {Promise<Object|null>} An object containing the API's id and its data, or null if no API is available.
  */
 async function getAvailableAPI() {
@@ -154,6 +161,12 @@ async function getAvailableAPI() {
         continue;
       }
 
+      // NEW: Check if API is enabled
+      if (data.enabled === false) {
+        console.log(`[API_POOL] Skipping disabled API ID ${id}.`);
+        continue;
+      }
+
       const count = Number(await redis.get(`api:${id}:sessions`) || 0);
       if (count < data.maxSessions) {
         console.log(`[API_POOL] API ${id} is available with ${count} sessions out of ${data.maxSessions}.`);
@@ -163,14 +176,14 @@ async function getAvailableAPI() {
       console.error(`[ERROR] Error parsing data for API ID ${id} in getAvailableAPI: ${e.message}. Data was: "${dataStr}"`);
     }
   }
-  console.log('[API_POOL] All APIs are at max capacity or no valid APIs found.');
+  console.log('All APIs are at max capacity or no valid APIs found.');
   return null;
 }
 
 /**
  * Helper function to fetch monitoring data for all APIs.
  * This is used by the dashboard route and the monitoring API endpoint.
- * Now includes active users for each API.
+ * Now includes active users for each API and available slots.
  * @returns {Promise<Array<Object>>} An array of API monitoring objects.
  */
 async function fetchMonitoringData() {
@@ -198,6 +211,8 @@ async function fetchMonitoringData() {
       const closedCount = Number(await redis.get(closedSessionsKey) || 0);
       const activeUsers = await redis.smembers(`api:${id}:users`); // Fetch active users from the set
 
+      const availableSlots = data.maxSessions - activeCount; // NEW: Calculate available slots
+
       monitoring.push({
         id,
         apiKey: data.apiKey,
@@ -205,7 +220,9 @@ async function fetchMonitoringData() {
         maxSessions: data.maxSessions,
         activeCount,
         closedCount,
-        activeUsers // Include active users in the monitoring data
+        activeUsers,
+        availableSlots, // NEW: Include available slots
+        enabled: typeof data.enabled === 'boolean' ? data.enabled : true // NEW: Include enabled status
       });
     } catch (e) {
       console.error(`[ERROR] Error processing monitoring data for API ID ${id}: ${e.message}. Data was: "${dataStr}"`);
@@ -283,7 +300,7 @@ app.post('/api/get-api-session', async (req, res) => {
 
     const targetAPI = await getAvailableAPI();
     if (!targetAPI) {
-      console.log(`[SESSION] User ${userId} could not get a session: All APIs at max capacity.`);
+      console.log(`[SESSION] User ${userId} could not get a session: All APIs are at max capacity.`);
       return res.status(503).json({ message: 'All APIs are at max capacity. Try again later.' });
     }
 
@@ -375,6 +392,7 @@ app.post('/api/end-session', async (req, res) => {
 
 app.post('/api/add-api', async (req, res) => {
   const { apiId, apiKey, characterId, maxSessions } = req.body;
+
   console.log(`[REQUEST] /api/add-api received for apiId: ${apiId}`);
 
   if (!apiId || typeof apiId !== 'string' || apiId.trim() === '' ||
@@ -394,7 +412,7 @@ app.post('/api/add-api', async (req, res) => {
       return res.status(400).json({ message: `API with ID '${apiId}' already exists.` });
     }
 
-    const apiData = { apiKey, characterId, maxSessions };
+    const apiData = { apiKey, characterId, maxSessions, enabled: true }; // NEW: Add enabled: true by default
     await redis.hset('apiPool', apiId, JSON.stringify(apiData));
     console.log(`[API_MGMT] Stored API data for ${apiId}.`);
 
@@ -404,7 +422,7 @@ app.post('/api/add-api', async (req, res) => {
     await redis.srem(`api:${apiId}:users`, 'dummy_init_value'); // Remove dummy value
     console.log(`[API_MGMT] Initialized session counters and user set for API ${apiId}.`);
 
-    console.log(`[API_MGMT] API added: ID ${apiId}, Character ID ${characterId}, Max Sessions: ${maxSessions}`);
+    console.log(`[API_MGMT] API added: ID ${apiId}, Character ID ${characterId}, Max Sessions: ${maxSessions}, Enabled: ${apiData.enabled}`);
     res.status(201).json({ message: 'API added successfully.', api: { id: apiId, ...apiData } });
   } catch (error) {
     console.error('[ERROR] Error in /api/add-api:', error);
@@ -413,7 +431,7 @@ app.post('/api/add-api', async (req, res) => {
 });
 
 app.post('/api/update-api', async (req, res) => {
-  const { apiId, apiKey, characterId, maxSessions } = req.body;
+  const { apiId, apiKey, characterId, maxSessions, enabled } = req.body; // NEW: Get 'enabled' from body
   console.log(`[REQUEST] /api/update-api received for apiId: ${apiId}`);
 
   if (!apiId || typeof apiId !== 'string' || apiId.trim() === '') {
@@ -442,13 +460,14 @@ app.post('/api/update-api', async (req, res) => {
     const updatedApiData = {
       apiKey: apiKey && typeof apiKey === 'string' && apiKey.trim() !== '' ? apiKey.trim() : existingApiData.apiKey,
       characterId: characterId && typeof characterId === 'string' && characterId.trim() !== '' ? characterId.trim() : existingApiData.characterId,
-      maxSessions: typeof maxSessions === 'number' && maxSessions > 0 ? maxSessions : existingApiData.maxSessions
+      maxSessions: typeof maxSessions === 'number' && maxSessions > 0 ? maxSessions : existingApiData.maxSessions,
+      enabled: typeof enabled === 'boolean' ? enabled : existingApiData.enabled // NEW: Update enabled status
     };
 
-    if (!updatedApiData.apiKey || !updatedApiData.characterId || typeof updatedApiData.maxSessions !== 'number' || updatedApiData.maxSessions <= 0) {
-      console.warn('[VALIDATION] Rejected /api/update-api payload due to invalid resulting API data:', updatedApiData);
+    if (!updatedApiData.apiKey || !updatedApiData.characterId || typeof updatedApiData.maxSessions !== 'number' || updatedApiData.maxSessions <= 0 || typeof updatedApiData.enabled !== 'boolean') {
+      console.warn('Rejected /api/update-api payload due to invalid resulting API data:', updatedApiData);
       return res.status(400).json({
-        message: 'Invalid input: apiKey, characterId must be non-empty strings, and maxSessions must be a positive number if provided for update.'
+        message: 'Invalid input: apiKey, characterId must be non-empty strings, maxSessions must be a positive number, and enabled must be a boolean.'
       });
     }
 
@@ -460,6 +479,35 @@ app.post('/api/update-api', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error during API update.' });
   }
 });
+
+app.post('/api/toggle-api-status', async (req, res) => { // NEW ENDPOINT
+  const { apiId, enabled } = req.body;
+  console.log(`[REQUEST] /api/toggle-api-status received for apiId: ${apiId}, enabled: ${enabled}`);
+
+  if (!apiId || typeof apiId !== 'string' || apiId.trim() === '' || typeof enabled !== 'boolean') {
+    console.warn(`[VALIDATION] Invalid input for toggle-api-status: apiId=${apiId}, enabled=${enabled}`);
+    return res.status(400).json({ message: 'Invalid input: apiId is required and enabled must be a boolean.' });
+  }
+
+  try {
+    const existingApiDataStr = await redis.hget('apiPool', apiId);
+    if (!existingApiDataStr) {
+      console.warn(`[API_MGMT] API with ID '${apiId}' not found for status toggle.`);
+      return res.status(404).json({ message: `API with ID '${apiId}' not found.` });
+    }
+
+    let existingApiData = JSON.parse(existingApiDataStr);
+    existingApiData.enabled = enabled; // Update the enabled status
+
+    await redis.hset('apiPool', apiId, JSON.stringify(existingApiData));
+    console.log(`[API_MGMT] API ${apiId} status toggled to enabled: ${enabled}.`);
+    res.json({ message: `API ${apiId} status updated to ${enabled ? 'enabled' : 'disabled'}.`, api: { id: apiId, ...existingApiData } });
+  } catch (error) {
+    console.error('[ERROR] Error in /api/toggle-api-status:', error);
+    res.status(500).json({ message: 'Internal Server Error during API status toggle.' });
+  }
+});
+
 
 app.delete('/api/remove-api', async (req, res) => {
   const { apiId } = req.body;
@@ -512,6 +560,10 @@ app.get('/dashboard', async (req, res) => {
       if (typeof dataStr === 'string' && dataStr.trim() !== '') {
         try {
           const parsedData = JSON.parse(dataStr);
+          // Ensure 'enabled' property exists, default to true if not present
+          if (typeof parsedData.enabled === 'undefined') {
+            parsedData.enabled = true;
+          }
           return { id, ...parsedData };
         } catch (e) {
           console.error(`[ERROR] Error parsing API data for dashboard ID ${id}: ${e.message}. Data was: "${dataStr}"`);

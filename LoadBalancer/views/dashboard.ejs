@@ -74,6 +74,13 @@
         .button-secondary:hover {
             background-color: #4b5563; /* gray-600 */
         }
+        .button-success { /* Added for Enable */
+            background-color: #22c55e; /* green-500 */
+            color: #ffffff;
+        }
+        .button-success:hover {
+            background-color: #16a34a; /* green-600 */
+        }
         .input-field {
             padding: 0.5rem 0.75rem; /* px-3 py-2 */
             border: 1px solid #d1d5db; /* border-gray-300 */
@@ -175,6 +182,7 @@
                             <th>API Key</th>
                             <th>Character ID</th>
                             <th>Max Sessions</th>
+                            <th>Status</th> <%-- NEW COLUMN --%>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -186,15 +194,22 @@
                                     <td class="break-all"><%= api.apiKey || 'N/A' %></td>
                                     <td class="break-all"><%= api.characterId || 'N/A' %></td>
                                     <td><%= api.maxSessions || 0 %></td>
+                                    <td>
+                                        <span class="status-dot <%= api.enabled ? 'available' : 'full' %>"></span>
+                                        <%= api.enabled ? 'Enabled' : 'Disabled' %>
+                                    </td> <%-- NEW CELL --%>
                                     <td class="text-center flex items-center justify-center space-x-2">
-                                        <button onclick="openUpdateModal('<%= api.id %>', <%= JSON.stringify(api.apiKey) %>, <%= JSON.stringify(api.characterId) %>, <%= api.maxSessions %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
+                                        <button onclick="openUpdateModal('<%= api.id %>', <%= JSON.stringify(api.apiKey) %>, <%= JSON.stringify(api.characterId) %>, <%= api.maxSessions %>, <%= api.enabled %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
+                                        <button onclick="toggleApiStatus('<%= api.id %>', <%= !api.enabled %>)" class="button <%= api.enabled ? 'button-danger' : 'button-success' %> text-xs px-3 py-1">
+                                            <%= api.enabled ? 'Disable' : 'Enable' %>
+                                        </button> <%-- NEW TOGGLE BUTTON --%>
                                         <button onclick="removeApi('<%= api.id %>')" class="button button-danger text-xs px-3 py-1">Remove</button>
                                     </td>
                                 </tr>
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="5" class="text-center py-4 text-gray-500">No APIs configured yet. Add one above!</td>
+                                <td colspan="6" class="text-center py-4 text-gray-500">No APIs configured yet. Add one above!</td> <%-- Updated colspan --%>
                             </tr>
                         <% } %>
                     </tbody>
@@ -213,6 +228,7 @@
                             <th>Status</th>
                             <th>Active Sessions</th>
                             <th>Max Sessions</th>
+                            <th>Available Slots</th> <%-- NEW COLUMN --%>
                             <th>Closed Sessions</th>
                             <th>Character ID</th>
                             <th>Active Users</th>
@@ -230,6 +246,7 @@
                                     </td>
                                     <td><%= mon.activeCount %></td>
                                     <td><%= mon.maxSessions %></td>
+                                    <td><%= mon.availableSlots %></td> <%-- NEW CELL --%>
                                     <td><%= mon.closedCount %></td>
                                     <td class="break-all"><%= mon.characterId || 'N/A' %></td>
                                     <td class="break-all text-xs">
@@ -246,7 +263,7 @@
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td>
+                                <td colspan="9" class="text-center py-4 text-gray-500">No monitoring data available.</td> <%-- Updated colspan --%>
                             </tr>
                         <% } %>
                     </tbody>
@@ -275,7 +292,7 @@
             </div>
         </div>
 
-        <!-- Session Activity Log Section (NEW) -->
+        <!-- Session Activity Log Section -->
         <div class="card">
             <h2 class="text-2xl font-semibold mb-4 text-indigo-600">Session Activity Log</h2>
             <div class="overflow-x-auto">
@@ -314,6 +331,13 @@
                 <div class="mb-6">
                     <label for="updateMaxSessions" class="block text-sm font-medium text-gray-700">Max Sessions</label>
                     <input type="number" id="updateMaxSessions" class="input-field mt-1" min="1">
+                </div>
+                <div class="mb-6"> <%-- NEW FIELD FOR ENABLED --%>
+                    <label for="updateEnabled" class="block text-sm font-medium text-gray-700">Enabled Status</label>
+                    <select id="updateEnabled" class="input-field mt-1">
+                        <option value="true">Enabled</option>
+                        <option value="false">Disabled</option>
+                    </select>
                 </div>
                 <div class="flex justify-end space-x-3">
                     <button onclick="closeUpdateModal()" class="button button-secondary">Cancel</button>
@@ -383,6 +407,7 @@
                     showSuccess(result.message);
                     e.target.reset(); // Resets all form fields
                     document.getElementById('addMaxSessions').value = '5'; // Ensure default is reset
+                    fetchAndDisplayApiList(); // Refresh API list
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
                     fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
@@ -396,12 +421,13 @@
 
         let currentUpdateApiId = null; // To store the ID of the API being updated
 
-        function openUpdateModal(apiId, apiKey, characterId, maxSessions) {
+        function openUpdateModal(apiId, apiKey, characterId, maxSessions, enabled) { // NEW: added 'enabled' param
             currentUpdateApiId = apiId;
             document.getElementById('updateApiId').value = apiId; // Hidden field
             document.getElementById('updateApiKey').value = apiKey;
             document.getElementById('updateCharacterId').value = characterId;
             document.getElementById('updateMaxSessions').value = maxSessions;
+            document.getElementById('updateEnabled').value = enabled.toString(); // Set selected value for dropdown
             document.getElementById('updateApiModal').classList.remove('hidden');
         }
 
@@ -415,9 +441,10 @@
             const apiKey = document.getElementById('updateApiKey').value.trim();
             const characterId = document.getElementById('updateCharacterId').value.trim();
             const maxSessions = parseInt(document.getElementById('updateMaxSessions').value, 10);
+            const enabled = document.getElementById('updateEnabled').value === 'true'; // Get boolean from dropdown
 
-            if (!apiId || !apiKey || !characterId || isNaN(maxSessions) || maxSessions <= 0) {
-                showError('Please fill in all fields correctly for updating an API (Key, Character ID must be non-empty, Max Sessions must be a positive number).');
+            if (!apiId || !apiKey || !characterId || isNaN(maxSessions) || maxSessions <= 0 || typeof enabled !== 'boolean') {
+                showError('Please fill in all fields correctly for updating an API (Key, Character ID must be non-empty, Max Sessions must be a positive number, Enabled status required).');
                 return;
             }
 
@@ -425,12 +452,13 @@
                 const response = await fetch('/api/update-api', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiId, apiKey, characterId, maxSessions })
+                    body: JSON.stringify({ apiId, apiKey, characterId, maxSessions, enabled }) // NEW: send enabled
                 });
                 const result = await response.json();
                 if (response.ok) {
                     showSuccess(result.message);
                     closeUpdateModal();
+                    fetchAndDisplayApiList(); // Refresh API list
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
                     fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
@@ -439,6 +467,33 @@
             } catch (error) {
                 console.error('Error updating API:', error);
                 showError('An error occurred while updating the API. Check console for details.');
+            }
+        }
+
+        async function toggleApiStatus(apiId, newStatus) { // NEW FUNCTION
+            const action = newStatus ? 'enable' : 'disable';
+            const confirmed = await customConfirm(`Are you sure you want to ${action} API '${apiId}'?`);
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/toggle-api-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiId, enabled: newStatus })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showSuccess(result.message);
+                    fetchAndDisplayApiList(); // Refresh API list
+                    fetchAndDisplayMonitoring(); // Refresh monitoring data
+                } else {
+                    showError(result.message || `Failed to ${action} API.`);
+                }
+            } catch (error) {
+                console.error(`Error toggling API status for ${apiId}:`, error);
+                showError(`An error occurred while trying to ${action} the API. Check console for details.`);
             }
         }
 
@@ -457,6 +512,7 @@
                 const result = await response.json();
                 if (response.ok) {
                     showSuccess(result.message);
+                    fetchAndDisplayApiList(); // Refresh API list
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
                     fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
@@ -468,12 +524,55 @@
             }
         }
 
+        // --- Fetch and Display API List (NEW FUNCTION for modularity) ---
+        async function fetchAndDisplayApiList() {
+            try {
+                const response = await fetch('/api/monitoring'); // Re-using monitoring endpoint as it contains full API data
+                const apisData = await response.json();
+
+                const tableBody = document.querySelector('#apiListTable tbody');
+                tableBody.innerHTML = ''; // Clear existing rows
+
+                if (apisData && apisData.length > 0) {
+                    apisData.forEach(api => {
+                        const row = `
+                            <tr class="table-row">
+                                <td>${api.id}</td>
+                                <td class="break-all">${api.apiKey || 'N/A'}</td>
+                                <td class="break-all">${api.characterId || 'N/A'}</td>
+                                <td>${api.maxSessions || 0}</td>
+                                <td>
+                                    <span class="status-dot ${api.enabled ? 'available' : 'full'}"></span>
+                                    ${api.enabled ? 'Enabled' : 'Disabled'}
+                                </td>
+                                <td class="text-center flex items-center justify-center space-x-2">
+                                    <button onclick="openUpdateModal('${api.id}', ${JSON.stringify(api.apiKey)}, ${JSON.stringify(api.characterId)}, ${api.maxSessions}, ${api.enabled})" class="button button-secondary text-xs px-3 py-1">Update</button>
+                                    <button onclick="toggleApiStatus('${api.id}', ${!api.enabled})" class="button ${api.enabled ? 'button-danger' : 'button-success'} text-xs px-3 py-1">
+                                        ${api.enabled ? 'Disable' : 'Enable'}
+                                    </button>
+                                    <button onclick="removeApi('${api.id}')" class="button button-danger text-xs px-3 py-1">Remove</button>
+                                </td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">No APIs configured yet. Add one above!</td></tr>`;
+                }
+            } catch (error) {
+                console.error('Error fetching and displaying API list:', error);
+                showError('Failed to refresh API list. Check console for details.');
+            }
+        }
+
+
         // --- Monitoring Refresh Function ---
         // Auto-refresh monitoring data every 5 seconds
         setInterval(fetchAndDisplayMonitoring, 5000);
 
         // Initial fetch on page load
         document.addEventListener('DOMContentLoaded', () => {
+            fetchAndDisplayApiList(); // Fetch API list on load
             fetchAndDisplayMonitoring();
             fetchAndDisplaySessionLog(); // Fetch session log on load
         });
@@ -500,6 +599,7 @@
                                 </td>
                                 <td>${mon.activeCount}</td>
                                 <td>${mon.maxSessions}</td>
+                                <td>${mon.availableSlots}</td> <%-- Display available slots --%>
                                 <td>${mon.closedCount}</td>
                                 <td class="break-all">${mon.characterId || 'N/A'}</td>
                                 <td class="break-all text-xs">
@@ -513,7 +613,7 @@
                         tableBody.insertAdjacentHTML('beforeend', row);
                     });
                 } else {
-                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
+                    tableBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-gray-500">No monitoring data available.</td></tr>`;
                 }
             } catch (error) {
                 console.error('Error fetching and displaying monitoring data:', error);
@@ -620,7 +720,7 @@
             }
         }
 
-        // --- Session Activity Log Functions (NEW) ---
+        // --- Session Activity Log Functions ---
         setInterval(fetchAndDisplaySessionLog, 5000); // Auto-refresh log every 5 seconds
 
         async function fetchAndDisplaySessionLog() {
