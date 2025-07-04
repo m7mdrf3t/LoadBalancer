@@ -15,7 +15,7 @@ app.use((req, res, next) => {
   // For development, this is typically 'http://localhost:3000'.
   // For production, this should be your deployed frontend URL (e.g., 'https://your-frontend-app.railway.app').
   // You can use an environment variable for this.
-  const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000'; 
+  const allowedOrigin = process.env.FRONTEND_URL || 'https://m7mdrf3t.github.io'; 
   res.header('Access-Control-Allow-Origin', allowedOrigin);
 
   // Allow credentials (cookies, HTTP auth) to be sent with cross-origin requests.
@@ -658,6 +658,18 @@ app.get('/api/session-events', async (req, res) => {
   }
 });
 
+app.delete('/api/session-events', async (req, res) => {
+  console.log('[REQUEST] /api/session-events DELETE received.');
+  try {
+    // Clear the session events log by deleting the Redis list
+    await redis.del('sessionEventsLog');
+    console.log('[SESSION] Session events log cleared successfully.');
+    res.json({ message: 'Session logs cleared successfully.' });
+  } catch (error) {
+    console.error('[ERROR] Error clearing session logs:', error);
+    res.status(500).json({ message: 'Internal Server Error clearing session logs.', error: error.message });
+  }
+});
 
 // --- Health Check Endpoint ---
 app.get('/api/health', async (req, res) => {
