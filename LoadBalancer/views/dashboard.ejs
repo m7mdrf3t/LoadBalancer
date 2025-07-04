@@ -275,6 +275,29 @@
             </div>
         </div>
 
+        <!-- Session Activity Log Section (NEW) -->
+        <div class="card">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-600">Session Activity Log</h2>
+            <div class="overflow-x-auto">
+                <table id="sessionLogTable" class="min-w-full bg-white border-collapse rounded-lg overflow-hidden">
+                    <thead>
+                        <tr class="table-header">
+                            <th>Timestamp</th>
+                            <th>Event Type</th>
+                            <th>User ID</th>
+                            <th>API ID</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Log entries will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="fetchAndDisplaySessionLog()" class="button button-primary mt-4 w-full md:w-auto">Refresh Session Log</button>
+        </div>
+
+
         <!-- Update API Modal -->
         <div id="updateApiModal" class="modal hidden">
             <div class="modal-content">
@@ -361,6 +384,7 @@
                     e.target.reset(); // Resets all form fields
                     document.getElementById('addMaxSessions').value = '5'; // Ensure default is reset
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
+                    fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
                     showError(result.message || 'Failed to add API.');
                 }
@@ -408,6 +432,7 @@
                     showSuccess(result.message);
                     closeUpdateModal();
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
+                    fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
                     showError(result.message || 'Failed to update API.');
                 }
@@ -433,6 +458,7 @@
                 if (response.ok) {
                     showSuccess(result.message);
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
+                    fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
                     showError(result.message || 'Failed to remove API.');
                 }
@@ -447,7 +473,10 @@
         setInterval(fetchAndDisplayMonitoring, 5000);
 
         // Initial fetch on page load
-        document.addEventListener('DOMContentLoaded', fetchAndDisplayMonitoring);
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchAndDisplayMonitoring();
+            fetchAndDisplaySessionLog(); // Fetch session log on load
+        });
 
         async function fetchAndDisplayMonitoring() {
             try {
@@ -473,7 +502,9 @@
                                 <td>${mon.maxSessions}</td>
                                 <td>${mon.closedCount}</td>
                                 <td class="break-all">${mon.characterId || 'N/A'}</td>
-                                <td class="break-all text-xs">${activeUsersList}</td>
+                                <td class="break-all text-xs">
+                                    ${activeUsersList}
+                                </td>
                                 <td class="text-center">
                                     <button onclick="endAllSessionsForApi('${mon.id}')" class="button button-danger text-xs px-3 py-1">End All Sessions</button>
                                 </td>
@@ -520,6 +551,7 @@
                     document.getElementById('assignedApiId').value = data.apiId || 'N/A';
                     showSuccess(`Session assigned for User ID: ${userId} with API: ${data.apiId}.`);
                     fetchAndDisplayMonitoring(); // Update monitoring data
+                    fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
                     showError(data.message || 'Failed to get API session.');
                 }
@@ -552,6 +584,7 @@
                     document.getElementById('assignedApiId').value = ''; // Clear assigned API
                     showSuccess(data.message || `Session ended for User ID: ${userId}.`);
                     fetchAndDisplayMonitoring(); // Update monitoring data
+                    fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
                     showError(data.message || 'Failed to end API session.');
                 }
@@ -577,12 +610,47 @@
                 if (response.ok) {
                     showSuccess(result.message || `All sessions for API '${apiId}' have been requested to end.`);
                     fetchAndDisplayMonitoring(); // Refresh monitoring data
+                    fetchAndDisplaySessionLog(); // Refresh session log
                 } else {
                     showError(result.message || 'Failed to end all sessions for API.');
                 }
             } catch (error) {
                 console.error('Error ending all sessions for API:', error);
                 showError('An error occurred while trying to end all sessions for the API. Check console for details.');
+            }
+        }
+
+        // --- Session Activity Log Functions (NEW) ---
+        setInterval(fetchAndDisplaySessionLog, 5000); // Auto-refresh log every 5 seconds
+
+        async function fetchAndDisplaySessionLog() {
+            try {
+                const response = await fetch('/api/session-events');
+                const sessionLogData = await response.json();
+
+                const tableBody = document.querySelector('#sessionLogTable tbody');
+                tableBody.innerHTML = ''; // Clear existing rows
+
+                if (sessionLogData && sessionLogData.length > 0) {
+                    sessionLogData.forEach(log => {
+                        const timestamp = new Date(log.timestamp).toLocaleString(); // Format timestamp
+                        const row = `
+                            <tr class="table-row">
+                                <td>${timestamp}</td>
+                                <td>${log.type}</td>
+                                <td>${log.userId || 'N/A'}</td>
+                                <td>${log.apiId || 'N/A'}</td>
+                                <td>${log.message || 'N/A'}</td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                } else {
+                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No session activity recorded yet.</td></tr>`;
+                }
+            } catch (error) {
+                console.error('Error fetching and displaying session log:', error);
+                showError('Failed to refresh session activity log. Check console for details.');
             }
         }
 

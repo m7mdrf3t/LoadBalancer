@@ -191,6 +191,32 @@ async function fetchMonitoringData() {
   return monitoring;
 }
 
+/**
+ * Logs a session event to a Redis list.
+ * @param {string} type - Type of event (e.g., 'session_ended', 'bulk_session_ended').
+ * @param {string} userId - The user ID involved.
+ * @param {string} apiId - The API ID involved.
+ * @param {string} [message=''] - Optional additional message.
+ */
+async function logSessionEvent(type, userId, apiId, message = '') {
+  const event = {
+    timestamp: new Date().toISOString(),
+    type,
+    userId,
+    apiId,
+    message
+  };
+  try {
+    // Push to the head of the list (LPUSH) for newest events first
+    await redis.lpush('sessionEventsLog', JSON.stringify(event));
+    // Trim the list to keep only the latest N entries (e.g., 100)
+    await redis.ltrim('sessionEventsLog', 0, 99);
+    console.log(`[EVENT_LOG] Logged event: ${JSON.stringify(event)}`);
+  } catch (error) {
+    console.error('[ERROR] Failed to log session event to Redis:', error);
+  }
+}
+
 // --- API Endpoints ---
 
 app.get('/', (req, res) => {
@@ -234,7 +260,7 @@ app.post('/api/get-api-session', async (req, res) => {
 
     const targetAPI = await getAvailableAPI();
     if (!targetAPI) {
-      console.log(`[SESSION] User ${userId} could not get a session: All APIs are at max capacity.`);
+      console.log(`[SESSION] User ${userId} could not get a session: All APIs at max capacity.`);
       return res.status(503).json({ message: 'All APIs are at max capacity. Try again later.' });
     }
 
@@ -273,8 +299,11 @@ app.post('/api/end-session', async (req, res) => {
 
   try {
     const sessionDataStr = await redis.get(`user:${userId}`);
+    let sessionApiId = 'unknown'; // Default for logging
+
     if (!sessionDataStr) {
       console.log(`[SESSION] No active session found for user ${userId}. Session might be already ended or expired.`);
+      await logSessionEvent('session_end_no_op', userId, sessionApiId, 'No active session found.');
       return res.json({ message: 'No active session found for this user, or session already ended.' });
     }
 
@@ -284,9 +313,11 @@ app.post('/api/end-session', async (req, res) => {
       if (typeof session !== 'object' || session === null || typeof session.apiId !== 'string' || session.apiId.trim() === '') {
         throw new Error('Malformed session data in Redis.');
       }
+      sessionApiId = session.apiId; // Update for logging
     } catch (e) {
       console.error(`[ERROR] Error parsing session data for user ${userId} during end-session: ${e.message}. Data was: "${sessionDataStr}"`);
       await redis.del(`user:${userId}`); // Clean up corrupt entry
+      await logSessionEvent('session_end_corrupt', userId, sessionApiId, 'Corrupt session data cleared.');
       return res.status(500).json({ message: 'Internal Server Error: Corrupt session data. Session cleared.' });
     }
 
@@ -310,9 +341,11 @@ app.post('/api/end-session', async (req, res) => {
     console.log(`[SESSION] Incremented closed sessions for API ${session.apiId}.`);
 
     console.log(`[SESSION] [${session.apiId}] Ended session for user ${userId}.`);
+    await logSessionEvent('session_ended', userId, sessionApiId); // Log successful session end
     res.json({ message: 'Session ended successfully.' });
   } catch (error) {
     console.error('[ERROR] Error in /api/end-session:', error);
+    await logSessionEvent('session_end_failed', userId, 'unknown', error.message);
     res.status(500).json({ message: 'Internal Server Error during session termination.' });
   }
 });
@@ -520,10 +553,33 @@ app.post('/api/end-all-sessions-for-api', async (req, res) => {
     console.log(`[SESSION] Cleared active users set for API ${apiId}.`);
 
     console.log(`[API_MGMT] All sessions for API ${apiId} have been successfully cleared.`);
+    await logSessionEvent('bulk_session_ended', 'N/A', apiId, `Cleared ${sessionsClearedCount} sessions.`); // Log bulk session end
     res.json({ message: `All ${sessionsClearedCount} sessions for API '${apiId}' ended successfully.` });
   } catch (error) {
     console.error('[ERROR] Error in /api/end-all-sessions-for-api:', error);
+    await logSessionEvent('bulk_session_end_failed', 'N/A', apiId, error.message);
     res.status(500).json({ message: 'Internal Server Error during bulk session termination.' });
+  }
+});
+
+// --- New Endpoint: Get Session Events Log ---
+app.get('/api/session-events', async (req, res) => {
+  console.log('[REQUEST] /api/session-events received.');
+  try {
+    // Fetch the latest 100 events from the Redis list
+    const rawEvents = await redis.lrange('sessionEventsLog', 0, 99);
+    const parsedEvents = rawEvents.map(eventStr => {
+      try {
+        return JSON.parse(eventStr);
+      } catch (e) {
+        console.error('[ERROR] Failed to parse session event from Redis:', eventStr, e);
+        return { timestamp: new Date().toISOString(), type: 'corrupt_data', message: 'Corrupt log entry' };
+      }
+    });
+    res.json(parsedEvents);
+  } catch (error) {
+    console.error('[ERROR] Error in /api/session-events:', error);
+    res.status(500).json({ message: 'Internal Server Error fetching session events.' });
   }
 });
 
