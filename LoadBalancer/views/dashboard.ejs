@@ -182,34 +182,45 @@
                             <th>API Key</th>
                             <th>Character ID</th>
                             <th>Max Sessions</th>
-                            <th>Status</th> <%-- NEW COLUMN --%>
+                            <th>Status</th> <!-- NEW COLUMN -->
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <% if (apis && apis.length > 0) { %>
                             <% apis.forEach(api => { %>
-                                <tr class="table-row">
-                                    <td><%= api.id %></td>
-                                    <td class="break-all"><%= api.apiKey || 'N/A' %></td>
-                                    <td class="break-all"><%= api.characterId || 'N/A' %></td>
-                                    <td><%= api.maxSessions || 0 %></td>
-                                    <td>
-                                        <span class="status-dot <%= api.enabled ? 'available' : 'full' %>"></span>
-                                        <%= api.enabled ? 'Enabled' : 'Disabled' %>
-                                    </td> <%-- NEW CELL --%>
-                                    <td class="text-center flex items-center justify-center space-x-2">
-                                        <button onclick="openUpdateModal('<%= api.id %>', <%= JSON.stringify(api.apiKey) %>, <%= JSON.stringify(api.characterId) %>, <%= api.maxSessions %>, <%= api.enabled %>)" class="button button-secondary text-xs px-3 py-1">Update</button>
-                                        <button onclick="toggleApiStatus('<%= api.id %>', <%= !api.enabled %>)" class="button <%= api.enabled ? 'button-danger' : 'button-success' %> text-xs px-3 py-1">
-                                            <%= api.enabled ? 'Disable' : 'Enable' %>
-                                        </button> <%-- NEW TOGGLE BUTTON --%>
-                                        <button onclick="removeApi('<%= api.id %>')" class="button button-danger text-xs px-3 py-1">Remove</button>
-                                    </td>
-                                </tr>
+                                <% 
+                                const isEnabled = api.enabled;
+                                const statusClass = isEnabled ? 'available' : 'full';
+                                const statusText = isEnabled ? 'Enabled' : 'Disabled';
+                                const toggleButtonClass = isEnabled ? 'button-danger' : 'button-success';
+                                const toggleButtonText = isEnabled ? 'Disable' : 'Enable';
+
+                                const updateOnClick = `openUpdateModal(${JSON.stringify(api.id)}, ${JSON.stringify(api.apiKey)}, ${JSON.stringify(api.characterId)}, ${JSON.stringify(api.maxSessions)}, ${JSON.stringify(isEnabled)})`;
+                                const toggleOnClick = `toggleApiStatus(${JSON.stringify(api.id)}, ${JSON.stringify(!isEnabled)})`;
+                                const removeOnClick = `removeApi(${JSON.stringify(api.id)})`;
+                            %>
+                            <tr class="table-row">
+                                <td><%= api.id %></td>
+                                <td class="break-all"><%= api.apiKey || 'N/A' %></td>
+                                <td class="break-all"><%= api.characterId || 'N/A' %></td>
+                                <td><%= api.maxSessions || 0 %></td>
+                                <td>
+                                    <span class="status-dot <%= statusClass %>"></span>
+                                    <%= statusText %>
+                                </td>
+                                <td class="text-center flex items-center justify-center space-x-2">
+                                    <button onclick='<%= updateOnClick %>' class="button button-secondary text-xs px-3 py-1">Update</button>
+                                    <button onclick='<%= toggleOnClick %>' class="button <%= toggleButtonClass %> text-xs px-3 py-1">
+                                        <%= toggleButtonText %>
+                                    </button>
+                                    <button onclick='<%= removeOnClick %>' class="button button-danger text-xs px-3 py-1">Remove</button>
+                                </td>
+                            </tr>
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="6" class="text-center py-4 text-gray-500">No APIs configured yet. Add one above!</td> <%-- Updated colspan --%>
+                                <td colspan="6" class="text-center py-4 text-gray-500">No APIs configured yet. Add one above!</td> <!-- Updated colspan -->
                             </tr>
                         <% } %>
                     </tbody>
@@ -228,7 +239,7 @@
                             <th>Status</th>
                             <th>Active Sessions</th>
                             <th>Max Sessions</th>
-                            <th>Available Slots</th> <%-- NEW COLUMN --%>
+                            <th>Available Slots</th> <!-- NEW COLUMN -->
                             <th>Closed Sessions</th>
                             <th>Character ID</th>
                             <th>Active Users</th>
@@ -246,7 +257,7 @@
                                     </td>
                                     <td><%= mon.activeCount %></td>
                                     <td><%= mon.maxSessions %></td>
-                                    <td><%= mon.availableSlots %></td> <%-- NEW CELL --%>
+                                    <td><%= mon.availableSlots %></td> <!-- NEW CELL -->
                                     <td><%= mon.closedCount %></td>
                                     <td class="break-all"><%= mon.characterId || 'N/A' %></td>
                                     <td class="break-all text-xs">
@@ -263,7 +274,7 @@
                             <% }); %>
                         <% } else { %>
                             <tr>
-                                <td colspan="9" class="text-center py-4 text-gray-500">No monitoring data available.</td> <%-- Updated colspan --%>
+                                <td colspan="9" class="text-center py-4 text-gray-500">No monitoring data available.</td> <!-- Updated colspan -->
                             </tr>
                         <% } %>
                     </tbody>
@@ -311,7 +322,10 @@
                     </tbody>
                 </table>
             </div>
-            <button onclick="fetchAndDisplaySessionLog()" class="button button-primary mt-4 w-full md:w-auto">Refresh Session Log</button>
+            <div class="flex flex-wrap gap-3 mt-4"> <!-- Flex container for buttons -->
+                <button onclick="fetchAndDisplaySessionLog()" class="button button-primary w-full md:w-auto">Refresh Session Log</button>
+                <button onclick="clearSessionLogs()" class="button button-danger w-full md:w-auto">Clear Logs</button> <!-- NEW BUTTON -->
+            </div>
         </div>
 
 
@@ -332,7 +346,7 @@
                     <label for="updateMaxSessions" class="block text-sm font-medium text-gray-700">Max Sessions</label>
                     <input type="number" id="updateMaxSessions" class="input-field mt-1" min="1">
                 </div>
-                <div class="mb-6"> <%-- NEW FIELD FOR ENABLED --%>
+                <div class="mb-6"> <!-- NEW FIELD FOR ENABLED -->
                     <label for="updateEnabled" class="block text-sm font-medium text-gray-700">Enabled Status</label>
                     <select id="updateEnabled" class="input-field mt-1">
                         <option value="true">Enabled</option>
@@ -546,8 +560,8 @@
                                     ${api.enabled ? 'Enabled' : 'Disabled'}
                                 </td>
                                 <td class="text-center flex items-center justify-center space-x-2">
-                                    <button onclick="openUpdateModal('${api.id}', ${JSON.stringify(api.apiKey)}, ${JSON.stringify(api.characterId)}, ${api.maxSessions}, ${api.enabled})" class="button button-secondary text-xs px-3 py-1">Update</button>
-                                    <button onclick="toggleApiStatus('${api.id}', ${!api.enabled})" class="button ${api.enabled ? 'button-danger' : 'button-success'} text-xs px-3 py-1">
+                                    <button onclick="openUpdateModal(${JSON.stringify(api.id)}, ${JSON.stringify(api.apiKey)}, ${JSON.stringify(api.characterId)}, ${JSON.stringify(api.maxSessions)}, ${JSON.stringify(api.enabled)})" class="button button-secondary text-xs px-3 py-1">Update</button>
+                                    <button onclick="toggleApiStatus(${JSON.stringify(api.id)}, ${JSON.stringify(typeof api.enabled !== 'undefined' ? !api.enabled : false)})" class="button ${api.enabled ? 'button-danger' : 'button-success'} text-xs px-3 py-1">
                                         ${api.enabled ? 'Disable' : 'Enable'}
                                     </button>
                                     <button onclick="removeApi('${api.id}')" class="button button-danger text-xs px-3 py-1">Remove</button>
@@ -599,7 +613,7 @@
                                 </td>
                                 <td>${mon.activeCount}</td>
                                 <td>${mon.maxSessions}</td>
-                                <td>${mon.availableSlots}</td> <%-- Display available slots --%>
+                                <td>${mon.availableSlots}</td> <!-- Display available slots -->
                                 <td>${mon.closedCount}</td>
                                 <td class="break-all">${mon.characterId || 'N/A'}</td>
                                 <td class="break-all text-xs">
@@ -751,6 +765,31 @@
             } catch (error) {
                 console.error('Error fetching and displaying session log:', error);
                 showError('Failed to refresh session activity log. Check console for details.');
+            }
+        }
+
+        // NEW: Function to clear session logs
+        async function clearSessionLogs() {
+            const confirmed = await customConfirm('Are you sure you want to clear ALL session activity logs? This action cannot be undone.');
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/session-events', { // Use DELETE method for clearing
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    showSuccess(result.message || 'Session logs cleared successfully.');
+                    fetchAndDisplaySessionLog(); // Refresh the log table after clearing
+                } else {
+                    showError(result.message || 'Failed to clear session logs.');
+                }
+            } catch (error) {
+                console.error('Error clearing session logs:', error);
+                showError('An error occurred while clearing session logs. Check console for details.');
             }
         }
 
