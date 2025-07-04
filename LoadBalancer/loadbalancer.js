@@ -10,16 +10,27 @@ const app = express();
 
 // --- Middleware ---
 app.use((req, res, next) => {
-  // IMPORTANT CORS FIX:
-  // Instead of '*', specify the exact origin(s) of your frontend application.
-  // For development, this is typically 'http://localhost:3000'.
-  // For production, this should be your deployed frontend URL (e.g., 'https://your-frontend-app.railway.app').
-  // You can use an environment variable for this.
-  const allowedOrigin = process.env.FRONTEND_URL || 'https://m7mdrf3t.github.io'; 
-  res.header('Access-Control-Allow-Origin', allowedOrigin);
+  // Define a list of explicitly allowed origins.
+  // This should include your local development URL, your GitHub Pages URL,
+  // and any other deployed frontend URLs (like your Lovable.app preview).
+  const allowedOrigins = [
+    'http://localhost:3000', // Your local development environment
+    'https://m7mdrf3t.github.io', // Your GitHub Pages direct URL
+    'https://preview--dr-self.lovable.app' // Your Lovable.app preview URL
+  ];
+
+  const origin = req.headers.origin;
+
+  // Check if the request origin is in our list of allowed origins.
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    // Optionally, log blocked origins for debugging
+    console.warn(`[CORS] Request from disallowed origin: ${origin}`);
+  }
 
   // Allow credentials (cookies, HTTP auth) to be sent with cross-origin requests.
-  // This MUST be true if Access-Control-Allow-Origin is not '*' and credentials are used.
+  // This MUST be true when Access-Control-Allow-Origin is not '*'
   res.header('Access-Control-Allow-Credentials', 'true'); 
 
   // Specify which headers are allowed in the actual request.
