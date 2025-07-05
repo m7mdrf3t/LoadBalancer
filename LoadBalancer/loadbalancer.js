@@ -16,14 +16,17 @@ app.use((req, res, next) => {
   const allowedOrigins = [
     'http://localhost:3000', // Your local development environment
     'https://m7mdrf3t.github.io', // Your GitHub Pages direct URL
+    'https://preview--dr-self.lovable.app', // Your Lovable.app preview URL
     'https://dr-self.lovable.app', // Your Lovable.app preview URL
+    null // Allow requests with a 'null' origin (e.g., file:// or certain iframe contexts)
   ];
 
   const origin = req.headers.origin;
 
   // Check if the request origin is in our list of allowed origins.
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
+  // Also handle cases where origin might be 'undefined' or a string 'null'
+  if (allowedOrigins.includes(origin) || (origin === undefined && allowedOrigins.includes(null))) {
+    res.header('Access-Control-Allow-Origin', origin || 'null'); // Use 'null' string if origin is undefined
   } else {
     // Optionally, log blocked origins for debugging
     console.warn(`[CORS] Request from disallowed origin: ${origin}`);
@@ -302,7 +305,7 @@ app.post('/api/get-api-session', async (req, res) => {
           characterId: sessionData.characterId
         });
       } catch (e) {
-        console.error(`[ERROR] Error parsing existing session data for user ${userId}: ${e.message}. Data was: "${existingSessionStr}"`);
+        console.error(`[ERROR] Error parsing existing session data for user ${userId} during end-session: ${e.message}. Data was: "${existingSessionStr}"`);
         await redis.del(`user:${userId}`); // Clean up corrupt entry
         console.log(`[SESSION] Cleared corrupt session data for user ${userId}. Attempting to assign new session.`);
         // Continue to find a new API
@@ -681,6 +684,7 @@ app.delete('/api/session-events', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error clearing session logs.', error: error.message });
   }
 });
+
 
 // --- Health Check Endpoint ---
 app.get('/api/health', async (req, res) => {
