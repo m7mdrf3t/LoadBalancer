@@ -16,7 +16,8 @@ app.use((req, res, next) => {
   const allowedOrigins = [
     'http://localhost:3000', // Your local development environment
     'https://m7mdrf3t.github.io', // Your GitHub Pages direct URL
-    'https://preview--dr-self.lovable.app' // Your Lovable.app preview URL
+    'https://preview--dr-self.lovable.app', // Your Lovable.app preview URL
+    'https://dr-self.lovable.app' // Your Lovable.app preview URL
   ];
 
   const origin = req.headers.origin;
